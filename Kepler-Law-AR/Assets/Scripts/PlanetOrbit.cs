@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class EarthOrbit : MonoBehaviour
+public class PlanetOrbit : MonoBehaviour
 {
     [Header("Orbit Settings")]
     public Transform sun;                
@@ -15,6 +15,10 @@ public class EarthOrbit : MonoBehaviour
 
     private float angle = 0f;
     public int segments = 200;
+
+    public bool rotate = true;              // Aktifkan rotasi
+    public float rotationSpeed = 10f;       // Derajat per detik
+    public Vector3 rotationAxis = Vector3.up; // Arah poros (Y = vertikal)
 
     void Start()
     {
@@ -47,6 +51,11 @@ public class EarthOrbit : MonoBehaviour
 
         Vector3 earthPosition = CalculateOrbitPosition(angle);
         transform.position = earthPosition;
+        
+        if (rotate)
+        {
+            transform.Rotate(rotationAxis, rotationSpeed * Time.deltaTime);
+        }
     }
 
     // Fungsi terpusat untuk menghitung posisi orbit
