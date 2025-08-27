@@ -4,116 +4,132 @@ using UnityEngine;
 
 public class KeplerLaw2 : MonoBehaviour
 {
-    [Header("Target & Focus")]
-    public Transform sun;                    // Fokus elips (Matahari)
+    [Header("Orbit Settings")]
+    public Transform sun;
+    public float orbitSpeed = 1f;
+    public float a = 0.8f;    // Sumbu semi-mayor
+    public float b = 0.6f;    // Sumbu semi-minor
 
-    [Header("Orbital Elements")]
-    public float semiMajorAxis = 100f;       // a (meter)
-    public float eccentricity = 0.3f;        // e (0 = lingkaran, 0.9 = sangat lonjong)
+    [Header("Orbit Line")]
+    public LineRenderer orbitLine;
+    public int segments = 200;
 
-    [Header("Motion Settings")]
-    public float orbitPeriod = 20f;          // Waktu untuk 1 putaran penuh (detik)
-    public bool isClockwise = false;         // Arah orbit
+    [Header("Planet Rotation")]
+    public bool rotate = true;
+    public float rotationSpeed = 10f;
+    public Vector3 rotationAxis = Vector3.up;
 
-    [Header("Debug")]
-    public bool drawDebugLines = true;       // Tampilkan garis ke Matahari
+    [Header("Juring Settings")]
+    public LineRenderer juringLine;         // untuk gambar sektor
+    public float deltaTimeArea = 1.0f;      // interval waktu (detik)
 
-    private float meanAnomaly = 0f;          // M (sudut rata-rata)
-    private float currentTrueAnomaly = 0f;   // θ (sudut aktual dari Matahari)
-    private Vector3 initialPosition;
+    private float angle = 0f;
+    private float timer = 0f;
+    private Vector3 lastPlanetPos;
 
     void Start()
     {
-        if (sun == null)
+        // Orbit path
+        if (orbitLine != null)
         {
-            Debug.LogError("Sun tidak diassign!", this);
-            enabled = false;
-            return;
+            orbitLine.positionCount = segments + 1;
+            orbitLine.useWorldSpace = true;
+            DrawEllipse();
         }
 
-        // Hitung kecepatan rata-rata (dalam radian/detik)
-        orbitPeriod = Mathf.Max(orbitPeriod, 0.1f); // Hindari nol
-        meanAnomaly = 0f;
+        // Juring line setup
+        if (juringLine != null)
+        {
+            juringLine.positionCount = 3; // segitiga: sun, start, end
+            juringLine.loop = true;
+            juringLine.material = new Material(Shader.Find("Unlit/Color"));
+            juringLine.startColor = Color.cyan;
+            juringLine.endColor = Color.cyan;
+        }
 
-        // Set posisi awal
-        initialPosition = CalculatePosition(currentTrueAnomaly);
-        transform.position = initialPosition;
+        lastPlanetPos = CalculateOrbitPosition(angle);
     }
 
     void Update()
     {
-        // 1. Mean anomaly bertambah linear terhadap waktu
-        float meanMotion = 2 * Mathf.PI / orbitPeriod; // n = 2π/T
-        meanAnomaly += meanMotion * Time.deltaTime;
-        meanAnomaly = WrapAngle(meanAnomaly, 2 * Mathf.PI);
+        // Posisi sekarang
+        Vector3 currentPos = CalculateOrbitPosition(angle);
 
-        // 2. Hitung True Anomaly dari Mean Anomaly
-        currentTrueAnomaly = SolveTrueAnomaly(meanAnomaly, eccentricity);
+        // Jarak ke Matahari
+        float r = Vector3.Distance(currentPos, sun.position);
 
-        // 3. Hitung posisi nyata
-        Vector3 newPosition = CalculatePosition(currentTrueAnomaly);
-        transform.position = newPosition;
-    }
+        // Hukum Kepler II: makin dekat makin cepat
+        float dynamicSpeed = orbitSpeed / r;
+        angle += dynamicSpeed * Time.deltaTime;
 
-    void OnDrawGizmos()
-    {
-        if (drawDebugLines && sun != null && enabled)
+        // Update posisi planet
+        Vector3 planetPos = CalculateOrbitPosition(angle);
+        transform.position = planetPos;
+
+        // Rotasi planet
+        if (rotate)
         {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawLine(sun.position, transform.position);
+            transform.Rotate(rotationAxis, rotationSpeed * Time.deltaTime);
+        }
+
+        // Update juring setiap deltaTimeArea
+        timer += Time.deltaTime;
+        if (timer >= deltaTimeArea)
+        {
+            if (juringLine != null)
+            {
+                juringLine.SetPosition(0, sun.position);
+                juringLine.SetPosition(1, lastPlanetPos);
+                juringLine.SetPosition(2, planetPos);
+            }
+            lastPlanetPos = planetPos;
+            timer = 0f;
         }
     }
 
-    // Hitung True Anomaly dari Mean Anomaly (via Eccentric Anomaly)
-    float SolveTrueAnomaly(float M, float e)
+    Vector3 CalculateOrbitPosition(float currentAngle)
     {
-        // Langkah 1: Cari Eccentric Anomaly (E) dari M = E - e*sin(E)
-        float E = M;
-        for (int i = 0; i < 10; i++)
+        float c = Mathf.Sqrt(Mathf.Abs(a * a - b * b));
+        bool isMajorHorizontal = a >= b;
+
+        Vector3 focusOffset;
+        if (isMajorHorizontal)
         {
-            float delta = (E - e * Mathf.Sin(E) - M) / (1 - e * Mathf.Cos(E));
-            E -= delta;
-            if (Mathf.Abs(delta) < 1e-6f) break;
+            focusOffset = new Vector3(c, 0, 0);
+        }
+        else
+        {
+            focusOffset = new Vector3(0, 0, c);
         }
 
-        // Langkah 2: Hitung True Anomaly dari E
-        float sinE = Mathf.Sin(E);
-        float cosE = Mathf.Cos(E);
+        Vector3 ellipseCenter = sun.position - focusOffset;
 
-        float numerator = Mathf.Sqrt(1 - e * e) * sinE;
-        float denominator = 1 - e * cosE;
+        float x = a * Mathf.Cos(currentAngle);
+        float z = b * Mathf.Sin(currentAngle);
 
-        return Mathf.Atan2(numerator, denominator);
+        if (!isMajorHorizontal)
+        {
+            x = b * Mathf.Cos(currentAngle);
+            z = a * Mathf.Sin(currentAngle);
+        }
+
+        return ellipseCenter + new Vector3(x, 0, z);
     }
 
-    // Hitung posisi dari True Anomaly (θ)
-    Vector3 CalculatePosition(float theta)
+    void DrawEllipse()
     {
-        // Tanda tergantung arah
-        if (isClockwise) theta = -theta;
+        if (orbitLine == null) return;
 
-        // Jarak dari Matahari ke planet
-        float r = (semiMajorAxis * (1 - eccentricity * eccentricity)) / (1 + eccentricity * Mathf.Cos(theta));
-
-        // Offset relatif terhadap Matahari
-        Vector3 offset = new Vector3(
-            r * Mathf.Cos(theta),
-            0,
-            r * Mathf.Sin(theta)
-        );
-
-        // Fokus elips: Matahari di salah satu fokus
-        float c = semiMajorAxis * eccentricity;
-        Vector3 ellipseCenter = sun.position - new Vector3(c, 0, 0);
-
-        return ellipseCenter + offset;
+        for (int i = 0; i <= segments; i++)
+        {
+            float theta = (float)i / segments * 2 * Mathf.PI;
+            Vector3 pos = CalculateOrbitPosition(theta);
+            orbitLine.SetPosition(i, pos);
+        }
     }
-
-    // Wrap angle ke [0, max)
-    float WrapAngle(float angle, float max)
+    
+    void LateUpdate()
     {
-        while (angle < 0) angle += max;
-        while (angle >= max) angle -= max;
-        return angle;
+        DrawEllipse(); // Update jalur tiap frame jika Matahari bergerak
     }
 }
