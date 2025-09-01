@@ -22,9 +22,9 @@ public class KeplerLaw2 : MonoBehaviour
     [Header("Area Wedge (Juring)")]
     public LineRenderer juringLine;         // Untuk gambar segitiga juring
     public float deltaTimeArea = 1.0f;      // Interval waktu gambar juring (detik)
-
+    public float visibilityTime = 2f;
     private float meanAnomaly = 0f;         // M: sudut rata-rata (bertambah konstan)
-    private float timer = 0f;
+    private float timer = 5f;
     private Vector3 lastPlanetPos;
 
     void Start()
