@@ -42,7 +42,11 @@ public class KeplerLaw2 : MonoBehaviour
             orbitLine.positionCount = segments + 1;
             orbitLine.useWorldSpace = true;
             orbitLine.loop = true;
-            ConfigureOrbitLine();
+            if (orbitLine.material == null)
+            {
+                ConfigureOrbitLine();
+            }
+            
             DrawOrbitPath();
         }
 
@@ -52,12 +56,17 @@ public class KeplerLaw2 : MonoBehaviour
             juringLine.positionCount = 3;
             juringLine.useWorldSpace = true;
             juringLine.loop = false;
-            juringLine.material = new Material(Shader.Find("Unlit/Color"));
-            juringLine.startColor = new Color(0, 1, 1, 0.5f); // Cyan transparan
-            juringLine.endColor = new Color(0, 1, 1, 0.5f);
-            juringLine.startWidth = 0.2f;
-            juringLine.endWidth = 0.2f;
-            juringLine.enabled = false;
+
+            if (juringLine.material == null)
+            {
+                juringLine.material = new Material(Shader.Find("Unlit/Color"));
+                juringLine.startColor = new Color(0, 1, 1, 0.5f); // Cyan transparan
+                juringLine.endColor = new Color(0, 1, 1, 0.5f);
+                juringLine.startWidth = 0.5f;
+                juringLine.endWidth = 0.5f;
+                juringLine.enabled = false;
+            }
+            
         }
 
         // Posisi awal
@@ -70,8 +79,8 @@ public class KeplerLaw2 : MonoBehaviour
         orbitLine.material = new Material(Shader.Find("Unlit/Color"));
         orbitLine.startColor = Color.yellow;
         orbitLine.endColor = Color.yellow;
-        orbitLine.startWidth = 0.1f;
-        orbitLine.endWidth = 0.1f;
+        juringLine.startWidth = 0.5f;
+        juringLine.endWidth = 0.5f;
     }
 
     void Update()
