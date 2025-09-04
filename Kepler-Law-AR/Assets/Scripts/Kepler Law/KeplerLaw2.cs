@@ -22,10 +22,17 @@ public class KeplerLaw2 : MonoBehaviour
     [Header("Area Wedge (Juring)")]
     public LineRenderer juringLine;         // Untuk gambar segitiga juring
     public float deltaTimeArea = 1.0f;      // Interval waktu gambar juring (detik)
-    public float visibilityTime = 2f;
-    private float meanAnomaly = 0f;         // M: sudut rata-rata (bertambah konstan)
+
+    [Header("Line Appearance")]
+    public float baseOrbitWidth = 0.5f;     // Lebar normal saat scale = (1,1,1)
+    public float baseJuringWidth = 0.5f;
+    public float minWidth = 0.1f;
+    public float maxWidth = 2f;
+
+    private float meanAnomaly = 0f;
     private float timer = 5f;
     private Vector3 lastPlanetPos;
+    private Vector3 originalLocalScale;     // Skala awal
 
     void Start()
     {
@@ -36,16 +43,26 @@ public class KeplerLaw2 : MonoBehaviour
             return;
         }
 
+        // Simpan skala awal
+        originalLocalScale = transform.localScale;
+
         // Setup orbit path
         if (orbitLine != null)
         {
             orbitLine.positionCount = segments + 1;
             orbitLine.useWorldSpace = true;
             orbitLine.loop = true;
+
             if (orbitLine.material == null)
             {
-                ConfigureOrbitLine();
+                orbitLine.material = new Material(Shader.Find("Unlit/Color"));
+                orbitLine.startColor = Color.yellow;
+                orbitLine.endColor = Color.yellow;
             }
+
+            // Set width awal
+            orbitLine.startWidth = baseOrbitWidth;
+            orbitLine.endWidth = baseOrbitWidth;
             
             DrawOrbitPath();
         }
@@ -62,48 +79,43 @@ public class KeplerLaw2 : MonoBehaviour
                 juringLine.material = new Material(Shader.Find("Unlit/Color"));
                 juringLine.startColor = new Color(0, 1, 1, 0.5f); // Cyan transparan
                 juringLine.endColor = new Color(0, 1, 1, 0.5f);
-                juringLine.startWidth = 0.5f;
-                juringLine.endWidth = 0.5f;
-                juringLine.enabled = false;
             }
-            
+
+            // Set width awal
+            juringLine.startWidth = baseJuringWidth;
+            juringLine.endWidth = baseJuringWidth;
+            juringLine.enabled = false;
         }
 
         // Posisi awal
         lastPlanetPos = CalculatePosition(0f);
         transform.position = lastPlanetPos;
-    }
 
-    void ConfigureOrbitLine()
-    {
-        orbitLine.material = new Material(Shader.Find("Unlit/Color"));
-        orbitLine.startColor = Color.yellow;
-        orbitLine.endColor = Color.yellow;
-        juringLine.startWidth = 0.5f;
-        juringLine.endWidth = 0.5f;
+        // Update width sekali
+        UpdateLineWidths();
     }
 
     void Update()
     {
-        // 1. Mean anomaly bertambah linear (waktu nyata)
-        float meanMotion = (2 * Mathf.PI) / orbitPeriod; // n = 2π/T
+        // 1. Mean anomaly bertambah linear
+        float meanMotion = (2 * Mathf.PI) / orbitPeriod;
         meanAnomaly += meanMotion * Time.deltaTime;
         meanAnomaly = Wrap(meanAnomaly, 2 * Mathf.PI);
 
-        // 2. Hitung True Anomaly dari Mean Anomaly
+        // 2. Hitung True Anomaly
         float trueAnomaly = SolveTrueAnomaly(meanAnomaly, eccentricity);
 
         // 3. Hitung posisi planet
         Vector3 planetPos = CalculatePosition(trueAnomaly);
         transform.position = planetPos;
 
-        // 4. Rotasi planet pada porosnya
+        // 4. Rotasi planet
         if (rotate)
         {
             transform.Rotate(rotationAxis, rotationSpeed * Time.deltaTime);
         }
 
-        // 5. Update juring (luas yang disapu)
+        // 5. Update juring
         timer += Time.deltaTime;
         if (timer >= deltaTimeArea)
         {
@@ -117,17 +129,44 @@ public class KeplerLaw2 : MonoBehaviour
             lastPlanetPos = planetPos;
             timer = 0f;
         }
+
+        UpdateLineWidths();
     }
 
     void LateUpdate()
     {
-        DrawOrbitPath(); // Update jalur jika Matahari bergerak
+        DrawOrbitPath(); 
     }
 
-    // Hitung True Anomaly dari Mean Anomaly (via Eccentric Anomaly)
+   
+    void UpdateLineWidths()
+    {
+        float currentScaleFactor = GetCurrentScaleFactor();
+
+        if (orbitLine != null)
+        {
+            float targetWidth = baseOrbitWidth * currentScaleFactor;
+            orbitLine.startWidth = Mathf.Clamp(targetWidth, minWidth, maxWidth);
+            orbitLine.endWidth = orbitLine.startWidth;
+        }
+
+        if (juringLine != null)
+        {
+            float targetWidth = baseJuringWidth * currentScaleFactor;
+            juringLine.startWidth = Mathf.Clamp(targetWidth, minWidth, maxWidth);
+            juringLine.endWidth = juringLine.startWidth;
+        }
+    }
+
+    float GetCurrentScaleFactor()
+    {
+        // Asumsi skala uniform (X=Y=Z)
+        return transform.localScale.x / originalLocalScale.x;
+    }
+
+    // ... (fungsi SolveTrueAnomaly, CalculatePosition, DrawOrbitPath, Wrap tetap sama)
     float SolveTrueAnomaly(float M, float e)
     {
-        // Newton-Raphson: selesaikan M = E - e*sin(E)
         float E = M;
         for (int i = 0; i < 10; i++)
         {
@@ -136,7 +175,6 @@ public class KeplerLaw2 : MonoBehaviour
             if (Mathf.Abs(delta) < 1e-6f) break;
         }
 
-        // Hitung True Anomaly dari E
         float sinE = Mathf.Sin(E);
         float cosE = Mathf.Cos(E);
         float denominator = 1 - e * cosE;
@@ -147,28 +185,23 @@ public class KeplerLaw2 : MonoBehaviour
         return Mathf.Atan2(sinTheta, cosTheta);
     }
 
-    // Hitung posisi dari True Anomaly
     Vector3 CalculatePosition(float theta)
     {
-        // Jarak dari Matahari: r = a(1-e²)/(1+e*cos(θ))
         float r = (semiMajorAxis * (1 - eccentricity * eccentricity)) /
                   (1 + eccentricity * Mathf.Cos(theta));
 
-        // Koordinat relatif terhadap Matahari
         Vector3 offset = new Vector3(
             r * Mathf.Cos(theta),
             0,
             r * Mathf.Sin(theta)
         );
 
-        // Pusat elips: fokus di Matahari (kiri)
         float c = semiMajorAxis * eccentricity;
         Vector3 ellipseCenter = sun.position - new Vector3(c, 0, 0);
 
         return ellipseCenter + offset;
     }
 
-    // Gambar jalur elips
     void DrawOrbitPath()
     {
         if (orbitLine == null) return;
@@ -181,7 +214,6 @@ public class KeplerLaw2 : MonoBehaviour
         }
     }
 
-    // Wrap angle ke [0, max)
     float Wrap(float angle, float max)
     {
         while (angle < 0) angle += max;
