@@ -6,10 +6,13 @@ public class AudioController : MonoBehaviour
 {
     public AudioSource audioSource;
     public AudioClip spaceClip;
+    public AudioClip tableClip;
 
     [Header("Kepler Dubb Audio")]
     public AudioSource audioSourceKeplerDubb;
     public AudioClip keplerDubbClip;
+    public AudioSource tableDubbClip;
+
     void Start()
     {
         PlayDefaultSound();
@@ -25,6 +28,12 @@ public class AudioController : MonoBehaviour
     {
         audioSourceKeplerDubb.clip = keplerDubbClip;
         audioSourceKeplerDubb.Play();
+    }
+
+    public void PlaySoundTable()
+    {
+        tableDubbClip.clip = tableClip;
+        tableDubbClip.Play();
     }
 
     public void StopSoundKeplerLaw()

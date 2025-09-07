@@ -6,8 +6,8 @@ using UnityEngine.UI;
 public class CarouselButtons : MonoBehaviour
 {
     [Header("Carousel Components")]
-    public ScrollRect scrollRect;   // Carousel gambar
-    public ScrollRect scrollInfo;   // Carousel teks/info
+    public ScrollRect scrollRect;   // Carousel gambar (wajib)
+    public ScrollRect scrollInfo;   // Carousel teks/info (opsional)
 
     [Header("Navigation Buttons")]
     public Button nextButton;
@@ -20,8 +20,15 @@ public class CarouselButtons : MonoBehaviour
 
     void Start()
     {
-        // Hitung max slide berdasarkan child terbanyak
-        maxIndex = Mathf.Min(scrollRect.content.childCount, scrollInfo.content.childCount) - 1;
+        if (scrollRect == null)
+        {
+            Debug.LogError("ScrollRect (gambar) wajib di-assign!");
+            enabled = false;
+            return;
+        }
+
+        // Hitung max slide berdasarkan scrollRect (gambar)
+        maxIndex = scrollRect.content.childCount - 1;
 
         nextButton.onClick.AddListener(NextSlide);
         previousButton.onClick.AddListener(PrevSlide);
@@ -49,12 +56,18 @@ public class CarouselButtons : MonoBehaviour
 
     void ScrollAll(int index)
     {
-        float targetImage = (float)index / (scrollRect.content.childCount - 1);
-        float targetInfo  = (float)index / (scrollInfo.content.childCount - 1);
-
         StopAllCoroutines();
+
+        // Scroll gambar (wajib)
+        float targetImage = (float)index / (scrollRect.content.childCount - 1);
         StartCoroutine(SmoothScroll(scrollRect, targetImage));
-        StartCoroutine(SmoothScroll(scrollInfo, targetInfo));
+
+        // Scroll info (opsional)
+        if (scrollInfo != null && scrollInfo.content.childCount > 1)
+        {
+            float targetInfo = (float)index / (scrollInfo.content.childCount - 1);
+            StartCoroutine(SmoothScroll(scrollInfo, targetInfo));
+        }
 
         UpdateButtons();
     }
