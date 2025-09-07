@@ -5,24 +5,36 @@ using UnityEngine.UI;
 
 public class CarouselButtons : MonoBehaviour
 {
-    public ScrollRect scrollRect;
+    [Header("Carousel Components")]
+    public ScrollRect scrollRect;   // Carousel gambar
+    public ScrollRect scrollInfo;   // Carousel teks/info
+
+    [Header("Navigation Buttons")]
     public Button nextButton;
     public Button previousButton;
 
     private int currentIndex = 0;
-    // Start is called before the first frame update
+    private int maxIndex; // jumlah slide maksimum
+
+    [SerializeField] private float scrollDuration = 0.3f;
+
     void Start()
     {
+        // Hitung max slide berdasarkan child terbanyak
+        maxIndex = Mathf.Min(scrollRect.content.childCount, scrollInfo.content.childCount) - 1;
+
         nextButton.onClick.AddListener(NextSlide);
         previousButton.onClick.AddListener(PrevSlide);
+
+        UpdateButtons();
     }
 
     void NextSlide()
     {
-        if (currentIndex < scrollRect.content.childCount - 1)
+        if (currentIndex < maxIndex)
         {
             currentIndex++;
-            ScrollTo(currentIndex);
+            ScrollAll(currentIndex);
         }
     }
 
@@ -31,29 +43,41 @@ public class CarouselButtons : MonoBehaviour
         if (currentIndex > 0)
         {
             currentIndex--;
-            ScrollTo(currentIndex);
+            ScrollAll(currentIndex);
         }
     }
 
-     void ScrollTo(int index)
+    void ScrollAll(int index)
     {
-        float target = (float)index / (scrollRect.content.childCount - 1);
-        StartCoroutine(SmoothScroll(target));
+        float targetImage = (float)index / (scrollRect.content.childCount - 1);
+        float targetInfo  = (float)index / (scrollInfo.content.childCount - 1);
+
+        StopAllCoroutines();
+        StartCoroutine(SmoothScroll(scrollRect, targetImage));
+        StartCoroutine(SmoothScroll(scrollInfo, targetInfo));
+
+        UpdateButtons();
     }
 
-    IEnumerator SmoothScroll(float target)
+    IEnumerator SmoothScroll(ScrollRect scroll, float target)
     {
-        float start = scrollRect.horizontalNormalizedPosition;
+        float start = scroll.horizontalNormalizedPosition;
         float elapsed = 0f;
-        float duration = 0.3f;
 
-        while (elapsed < duration)
+        while (elapsed < scrollDuration)
         {
             elapsed += Time.deltaTime;
-            scrollRect.horizontalNormalizedPosition = Mathf.Lerp(start, target, elapsed / duration);
+            scroll.horizontalNormalizedPosition = Mathf.Lerp(start, target, elapsed / scrollDuration);
             yield return null;
         }
 
-        scrollRect.horizontalNormalizedPosition = target;
+        scroll.horizontalNormalizedPosition = target;
+    }
+
+    void UpdateButtons()
+    {
+        // Disable button jika sudah di ujung
+        previousButton.interactable = currentIndex > 0;
+        nextButton.interactable = currentIndex < maxIndex;
     }
 }

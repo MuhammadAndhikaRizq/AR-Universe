@@ -4,22 +4,38 @@ using UnityEngine;
 
 public class ARCameraZoom : MonoBehaviour
 {
-    [Header("Zoom Settings")]
-    public Transform solarSystemRoot;        // Root objek tata surya
-    public float minScale = 0.5f;            // Zoom out (kecil)
-    public float maxScale = 5f;              // Zoom in (besar)
-    public float scrollSensitivity = 0.5f;   // Sensitivitas
+     public Camera mainCam;
+    public float zoomStep = 2f;    // besar perubahan tiap klik
+    public float minZoom = 5f;
+    public float maxZoom = 50f;
 
-    void Update()
+    void Start()
     {
-        float scroll = Input.GetAxis("Mouse ScrollWheel");
+        if (mainCam == null) mainCam = Camera.main;
+    }
 
-        if (scroll != 0f && solarSystemRoot != null)
+    public void ZoomIn()
+    {
+        Debug.Log("On clicked");
+        if (mainCam.orthographic)
         {
-            float newScale = solarSystemRoot.localScale.x + scroll * scrollSensitivity;
-            newScale = Mathf.Clamp(newScale, minScale, maxScale);
+            mainCam.orthographicSize = Mathf.Max(minZoom, mainCam.orthographicSize - zoomStep);
+        }
+        else
+        {
+            mainCam.fieldOfView = Mathf.Max(minZoom, mainCam.fieldOfView - zoomStep);
+        }
+    }
 
-            solarSystemRoot.localScale = new Vector3(newScale, newScale, newScale);
+    public void ZoomOut()
+    {
+        if (mainCam.orthographic)
+        {
+            mainCam.orthographicSize = Mathf.Min(maxZoom, mainCam.orthographicSize + zoomStep);
+        }
+        else
+        {
+            mainCam.fieldOfView = Mathf.Min(maxZoom, mainCam.fieldOfView + zoomStep);
         }
     }
 }

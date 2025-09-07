@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class KeplerLaw3 : MonoBehaviour
@@ -25,6 +26,7 @@ public class KeplerLaw3 : MonoBehaviour
     public float baseOrbitWidth = 0.5f;     // Lebar normal saat scale = (1,1,1)
     public float minWidth = 0.1f;
     public float maxWidth = 2f;
+    public TextMeshProUGUI infoText;
 
     private float meanAnomaly = 0f;
     private Vector3 lastPlanetPos;
@@ -73,19 +75,27 @@ public class KeplerLaw3 : MonoBehaviour
 
     void Update()
     {
-        // 1. Mean anomaly bertambah linear
+
+        if (infoText != null)
+        {
+            float T = orbitPeriod;
+            float a = semiMajorAxis;
+            float ratio = (T * T) / (a * a * a);
+
+            infoText.text = $"T={T:F1}s\na={a:F0}\nT²/a³={ratio:E2}";
+            
+        }
+
         float meanMotion = (2 * Mathf.PI) / orbitPeriod;
         meanAnomaly += meanMotion * Time.deltaTime;
         meanAnomaly = Wrap(meanAnomaly, 2 * Mathf.PI);
-
-        // 2. Hitung True Anomaly
+        
         float trueAnomaly = SolveTrueAnomaly(meanAnomaly, eccentricity);
 
-        // 3. Hitung posisi planet
+        
         Vector3 planetPos = CalculatePosition(trueAnomaly);
         transform.position = planetPos;
 
-        // 4. Rotasi planet
         if (rotate)
         {
             transform.Rotate(rotationAxis, rotationSpeed * Time.deltaTime);
