@@ -51,4 +51,9 @@ public class SceneController : MonoBehaviour
             Debug.LogError("Invalid scene index: " + index);
         }
     }
+
+    public void QuitAplication()
+    {
+        Application.Quit();
+    }
 }
