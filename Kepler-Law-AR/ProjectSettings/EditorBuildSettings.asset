@@ -20,4 +20,6 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Law 3.unity
     guid: 513693059eed38242af0f217145a8f61
-  m_configObjects: {}
+  m_configObjects:
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: d4ae65d3492215e4bb2b9abbf56a85ef,
+      type: 2}

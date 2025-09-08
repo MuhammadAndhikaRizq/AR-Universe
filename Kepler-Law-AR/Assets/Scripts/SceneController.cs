@@ -56,4 +56,14 @@ public class SceneController : MonoBehaviour
     {
         Application.Quit();
     }
+
+    public void ActiveScene(GameObject panel)
+    {
+        panel.SetActive(true);
+    }
+
+    public void NonActiveScene(GameObject panel)
+    {
+        panel.SetActive(false);
+    }
 }
