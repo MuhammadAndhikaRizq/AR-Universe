@@ -1,223 +1,173 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 
 public class KeplerLaw2 : MonoBehaviour
 {
-    [Header("Orbit Settings")]
-    public Transform sun;                    // Matahari (fokus elips)
-    public float semiMajorAxis = 100f;      // a (sumbu semi-mayor)
-    public float eccentricity = 0.5f;       // e (0 = lingkaran, 0.3 = elips sedang)
-    public float orbitPeriod = 20f;         // Waktu untuk 1 putaran (detik)
+    public Transform sun; // drag Sun ke sini
+    public float a = 5f; // semi-major axis
+    public float b = 3f; // semi-minor axis
+    public float orbitalPeriod = 10f; // durasi satu orbit (detik)
+    public float sectorTimeSpan = 1f; // interval waktu tiap juring (misal 1 detik)
+    public int maxSectors = 4; // maksimum juring yang ditampilkan (A,B,C,D)
 
-    [Header("Visualization")]
-    public LineRenderer orbitLine;          // Garis orbit (path)
-    public int segments = 200;              // Jumlah titik di orbit
-
-    [Header("Planet Rotation")]
-    public bool rotate = true;              // Apakah planet berotasi?
-    public float rotationSpeed = 10f;       // Kecepatan rotasi (derajat/detik)
-    public Vector3 rotationAxis = Vector3.up;
-
-    [Header("Area Wedge (Juring)")]
-    public LineRenderer juringLine;         // Untuk gambar segitiga juring
-    public float deltaTimeArea = 1.0f;      // Interval waktu gambar juring (detik)
-
-    [Header("Line Appearance")]
-    public float baseOrbitWidth = 0.5f;     // Lebar normal saat scale = (1,1,1)
-    public float baseJuringWidth = 0.5f;
-    public float minWidth = 0.1f;
-    public float maxWidth = 2f;
-
-    private float meanAnomaly = 0f;
-    private float timer = 5f;
-    private Vector3 lastPlanetPos;
-    private Vector3 originalLocalScale;     // Skala awal
+    private List<Vector3> sectorPositions = new List<Vector3>();
+    private List<GameObject> sectorMeshes = new List<GameObject>();
+    private LineRenderer orbitRenderer;
 
     void Start()
     {
-        if (sun == null)
+        DrawOrbit();
+        StartCoroutine(Animate());
+    }
+
+    void DrawOrbit()
+    {
+        GameObject orbitObj = new GameObject("Orbit");
+        orbitRenderer = orbitObj.AddComponent<LineRenderer>();
+        orbitRenderer.positionCount = 360;
+        orbitRenderer.startWidth = 0.05f;
+        orbitRenderer.endWidth = 0.05f;
+        orbitRenderer.material = new Material(Shader.Find("Sprites/Default")) { color = Color.gray };
+
+        for (int i = 0; i < 360; i++)
         {
-            Debug.LogError("Sun tidak diassign!", this);
-            enabled = false;
-            return;
+            float angle = i * Mathf.Deg2Rad;
+            float x = a * Mathf.Cos(angle);
+            float z = b * Mathf.Sin(angle);
+            orbitRenderer.SetPosition(i, new Vector3(x, 0, z));
         }
+    }
 
-        // Simpan skala awal
-        originalLocalScale = transform.localScale;
+    System.Collections.IEnumerator Animate()
+    {
+        float t = 0f;
+        float lastRecordTime = Time.time;
+        Vector3 lastPos = GetPosition(t);
 
-        // Setup orbit path
-        if (orbitLine != null)
+        while (true)
         {
-            orbitLine.positionCount = segments + 1;
-            orbitLine.useWorldSpace = true;
-            orbitLine.loop = true;
+            t += Time.deltaTime / orbitalPeriod;
+            if (t > 1f) t -= 1f;
 
-            if (orbitLine.material == null)
+            Vector3 newPos = GetPosition(t);
+            transform.position = newPos;
+
+            // Simpan titik tiap interval waktu
+            if (Time.time - lastRecordTime >= sectorTimeSpan)
             {
-                orbitLine.material = new Material(Shader.Find("Unlit/Color"));
-                orbitLine.startColor = Color.yellow;
-                orbitLine.endColor = Color.yellow;
+                if (sectorPositions.Count == 0)
+                {
+                    // Titik awal (A)
+                    sectorPositions.Add(newPos);
+                }
+                else
+                {
+                    // Titik berikutnya (B, C, D...)
+                    sectorPositions.Add(newPos);
+                    DrawSector(sectorPositions[sectorPositions.Count - 2], newPos);
+                }
+
+                // Batasi jumlah juring
+                if (sectorPositions.Count > maxSectors)
+                {
+                    sectorPositions.RemoveAt(0); // hapus titik paling awal
+                    if (sectorMeshes.Count > 0)
+                    {
+                        Destroy(sectorMeshes[0]);
+                        sectorMeshes.RemoveAt(0);
+                    }
+                }
+
+                UpdateLabels();
+                lastRecordTime = Time.time;
             }
 
-            // Set width awal
-            orbitLine.startWidth = baseOrbitWidth;
-            orbitLine.endWidth = baseOrbitWidth;
-            
-            DrawOrbitPath();
-        }
-
-        // Setup juring
-        if (juringLine != null)
-        {
-            juringLine.positionCount = 3;
-            juringLine.useWorldSpace = true;
-            juringLine.loop = false;
-
-            if (juringLine.material == null)
-            {
-                juringLine.material = new Material(Shader.Find("Unlit/Color"));
-                juringLine.startColor = new Color(0, 1, 1, 0.5f); // Cyan transparan
-                juringLine.endColor = new Color(0, 1, 1, 0.5f);
-            }
-
-            // Set width awal
-            juringLine.startWidth = baseJuringWidth;
-            juringLine.endWidth = baseJuringWidth;
-            juringLine.enabled = false;
-        }
-
-        // Posisi awal
-        lastPlanetPos = CalculatePosition(0f);
-        transform.position = lastPlanetPos;
-
-        // Update width sekali
-        UpdateLineWidths();
-    }
-
-    void Update()
-    {
-        // 1. Mean anomaly bertambah linear
-        float meanMotion = (2 * Mathf.PI) / orbitPeriod;
-        meanAnomaly += meanMotion * Time.deltaTime;
-        meanAnomaly = Wrap(meanAnomaly, 2 * Mathf.PI);
-
-        // 2. Hitung True Anomaly
-        float trueAnomaly = SolveTrueAnomaly(meanAnomaly, eccentricity);
-
-        // 3. Hitung posisi planet
-        Vector3 planetPos = CalculatePosition(trueAnomaly);
-        transform.position = planetPos;
-
-        // 4. Rotasi planet
-        if (rotate)
-        {
-            transform.Rotate(rotationAxis, rotationSpeed * Time.deltaTime);
-        }
-
-        // 5. Update juring
-        timer += Time.deltaTime;
-        if (timer >= deltaTimeArea)
-        {
-            if (juringLine != null)
-            {
-                juringLine.SetPosition(0, sun.position);
-                juringLine.SetPosition(1, lastPlanetPos);
-                juringLine.SetPosition(2, planetPos);
-                juringLine.enabled = true;
-            }
-            lastPlanetPos = planetPos;
-            timer = 0f;
-        }
-
-        UpdateLineWidths();
-    }
-
-    void LateUpdate()
-    {
-        DrawOrbitPath(); 
-    }
-
-   
-    void UpdateLineWidths()
-    {
-        float currentScaleFactor = GetCurrentScaleFactor();
-
-        if (orbitLine != null)
-        {
-            float targetWidth = baseOrbitWidth * currentScaleFactor;
-            orbitLine.startWidth = Mathf.Clamp(targetWidth, minWidth, maxWidth);
-            orbitLine.endWidth = orbitLine.startWidth;
-        }
-
-        if (juringLine != null)
-        {
-            float targetWidth = baseJuringWidth * currentScaleFactor;
-            juringLine.startWidth = Mathf.Clamp(targetWidth, minWidth, maxWidth);
-            juringLine.endWidth = juringLine.startWidth;
+            yield return null;
         }
     }
 
-    float GetCurrentScaleFactor()
+    Vector3 GetPosition(float t)
     {
-        // Asumsi skala uniform (X=Y=Z)
-        return transform.localScale.x / originalLocalScale.x;
-    }
-
-    // ... (fungsi SolveTrueAnomaly, CalculatePosition, DrawOrbitPath, Wrap tetap sama)
-    float SolveTrueAnomaly(float M, float e)
-    {
-        float E = M;
-        for (int i = 0; i < 10; i++)
-        {
-            float delta = (E - e * Mathf.Sin(E) - M) / (1 - e * Mathf.Cos(E));
-            E -= delta;
-            if (Mathf.Abs(delta) < 1e-6f) break;
-        }
-
-        float sinE = Mathf.Sin(E);
-        float cosE = Mathf.Cos(E);
-        float denominator = 1 - e * cosE;
-
-        float sinTheta = (Mathf.Sqrt(1 - e * e) * sinE) / denominator;
-        float cosTheta = (cosE - e) / denominator;
-
-        return Mathf.Atan2(sinTheta, cosTheta);
-    }
-
-    Vector3 CalculatePosition(float theta)
-    {
-        float r = (semiMajorAxis * (1 - eccentricity * eccentricity)) /
-                  (1 + eccentricity * Mathf.Cos(theta));
-
-        Vector3 offset = new Vector3(
-            r * Mathf.Cos(theta),
-            0,
-            r * Mathf.Sin(theta)
+        float meanAnomaly = t * 2 * Mathf.PI;
+        float e = Mathf.Sqrt(1 - (b * b) / (a * a)); // eksentrisitas
+        float E = SolveKeplerEquation(meanAnomaly, e); // eccentric anomaly
+        float trueAnomaly = 2 * Mathf.Atan2(
+            Mathf.Sqrt(1 + e) * Mathf.Sin(E / 2),
+            Mathf.Sqrt(1 - e) * Mathf.Cos(E / 2)
         );
 
-        float c = semiMajorAxis * eccentricity;
-        Vector3 ellipseCenter = sun.position - new Vector3(c, 0, 0);
-
-        return ellipseCenter + offset;
+        float r = a * (1 - e * e) / (1 + e * Mathf.Cos(trueAnomaly));
+        float x = r * Mathf.Cos(trueAnomaly);
+        float z = r * Mathf.Sin(trueAnomaly);
+        return new Vector3(x, 0, z);
     }
 
-    void DrawOrbitPath()
+    float SolveKeplerEquation(float M, float e, int maxIter = 10)
     {
-        if (orbitLine == null) return;
-
-        for (int i = 0; i <= segments; i++)
+        float E = M;
+        for (int i = 0; i < maxIter; i++)
         {
-            float theta = (float)i / segments * 2 * Mathf.PI;
-            Vector3 pos = CalculatePosition(theta);
-            orbitLine.SetPosition(i, pos);
+            E = M + e * Mathf.Sin(E);
         }
+        return E;
     }
 
-    float Wrap(float angle, float max)
+    void DrawSector(Vector3 start, Vector3 end)
     {
-        while (angle < 0) angle += max;
-        while (angle >= max) angle -= max;
-        return angle;
+        GameObject sectorObj = new GameObject("Sector");
+        sectorMeshes.Add(sectorObj);
+
+        MeshFilter mf = sectorObj.AddComponent<MeshFilter>();
+        MeshRenderer mr = sectorObj.AddComponent<MeshRenderer>();
+        mr.material = new Material(Shader.Find("Sprites/Default"))
+        {
+            color = new Color(0.5f, 0.8f, 1f, 0.4f) // biru transparan
+        };
+
+        Mesh mesh = new Mesh();
+        List<Vector3> vertices = new List<Vector3>();
+        List<int> triangles = new List<int>();
+
+        // Titik: Matahari, Titik Awal, Titik Akhir
+        vertices.Add(sun.position);
+        vertices.Add(start);
+        vertices.Add(end);
+
+        triangles.Add(0); triangles.Add(1); triangles.Add(2);
+
+        mesh.vertices = vertices.ToArray();
+        mesh.triangles = triangles.ToArray();
+        mesh.RecalculateNormals();
+
+        mf.mesh = mesh;
+    }
+
+    void UpdateLabels()
+    {
+        // Hapus semua label lama
+        GameObject[] oldLabels = GameObject.FindGameObjectsWithTag("KeplerLabel");
+        foreach (GameObject label in oldLabels)
+        {
+            Destroy(label);
+        }
+
+        // Tambahkan label A, B, C, D di atas titik
+        for (int i = 0; i < sectorPositions.Count; i++)
+        {
+            Vector3 pos = sectorPositions[i];
+            GameObject label = new GameObject($"Label_{(char)(65 + i)}");
+            label.tag = "KeplerLabel"; // Untuk mudah dihapus nanti
+            label.transform.position = pos + Vector3.up * 0.8f; // di atas planet
+
+            // Gunakan TextMeshPro
+            TextMeshPro text = label.AddComponent<TextMeshPro>();
+            text.text = ((char)(65 + i)).ToString(); // A, B, C, D
+            text.fontSize = 2.0f;
+            text.color = Color.black;
+            text.alignment = TextAlignmentOptions.Center;
+            text.fontStyle = FontStyles.Bold;
+        }
     }
 }
